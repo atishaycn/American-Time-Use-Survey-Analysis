@@ -13,14 +13,15 @@ from pyspark.sql import SQLContext
 import pyspark.ml.tuning as tune
 from pyspark.ml.evaluation import RegressionEvaluator
 
-
+# COMMAND ----------
 
 # MAGIC %sh wget https://www.dropbox.com/s/9xf7gwlal3dj4bv/HEALTHRESPONACTISUMMARYMERGED.csv?dl=1 -O combinedHealth.csv
 
-
+# COMMAND ----------
 
 healthCombined = pd.read_csv('combinedHealth.csv')
 healthCombined.head()
+#healthCombined = spark.read.csv('file:///databricks/driver/combinedHealth.csv')
 
 # COMMAND ----------
 
@@ -71,10 +72,6 @@ display()
 plt.figure()
 plt.hist(preprocessing.scale(healthCombinedCleaned.ERTPREAT))
 display()
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
@@ -179,10 +176,6 @@ scaledModel.transform(test).select(rmse).show()
 
 # COMMAND ----------
 
-linModelUnscaled = scaledModel.stages[-1]
-
-# COMMAND ----------
-
 linModelUnscaled.coefficients
 
 # COMMAND ----------
@@ -228,11 +221,6 @@ fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
 sns.barplot( y = 'notScaled', x = 'feature', data = valuesDF)
 plt.xticks(rotation = 60)
 display()
-
-# COMMAND ----------
-
-indexDf = valuesDF.set_index('feature')
-indexDf
 
 # COMMAND ----------
 
@@ -371,7 +359,23 @@ cvVer = CrossValidatorVerbose(estimator = crossPipe, estimatorParamMaps = grid, 
 
 # COMMAND ----------
 
-cvVer.fit(training).transform(test)
+varStore = cvVer.fit(training)
+
+# COMMAND ----------
+
+valStore = varStore.transform(validation)
+
+# COMMAND ----------
+
+valStore.select(rmse).show()
+
+# COMMAND ----------
+
+testStore = varStore.transform(test)
+
+# COMMAND ----------
+
+testStore.select(rmse).show()
 
 # COMMAND ----------
 
@@ -386,100 +390,7 @@ for key, value in sorted(newDict.iteritems(), key=lambda (k,v): (v,k)):
 
 # COMMAND ----------
 
-cvVer.bes
-
-# COMMAND ----------
-
-finalModelFit =  cv.fit(training)
-
-# COMMAND ----------
-
-evaluator.evaluate(finalModelFit.transform(test))
-
-# COMMAND ----------
-
-pred =  finalModelFit.transform(test)
-
-# COMMAND ----------
-
-pred.select('ERBMI', 'prediction').show(500)
-
-# COMMAND ----------
-
-pred.select(rmse).show()
-
-# COMMAND ----------
-
-best = finalModelFit.bestModel.stages[-1]
-
-# COMMAND ----------
-
-from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
-
-# COMMAND ----------
-
-class CrossValidatorVerbose(CrossValidator):
-
-    def _fit(self, dataset):
-        est = self.getOrDefault(self.estimator)
-        epm = self.getOrDefault(self.estimatorParamMaps)
-        numModels = len(epm)
-
-        eva = self.getOrDefault(self.evaluator)
-        metricName = eva.getMetricName()
-
-        nFolds = self.getOrDefault(self.numFolds)
-        seed = self.getOrDefault(self.seed)
-        h = 1.0 / nFolds
-
-        randCol = self.uid + "_rand"
-        df = dataset.select("*", rand(seed).alias(randCol))
-        metrics = [0.0] * numModels
-
-        for i in range(nFolds):
-            foldNum = i + 1
-            print("Comparing models on fold %d" % foldNum)
-
-            validateLB = i * h
-            validateUB = (i + 1) * h
-            condition = (df[randCol] >= validateLB) & (df[randCol] < validateUB)
-            validation = df.filter(condition)
-            train = df.filter(~condition)
-
-            for j in range(numModels):
-                paramMap = epm[j]
-                model = est.fit(train, paramMap)
-                # TODO: duplicate evaluator to take extra params from input
-                metric = eva.evaluate(model.transform(validation, paramMap))
-                metrics[j] += metric
-
-                avgSoFar = metrics[j] / foldNum
-                print("params: %s\t%s: %f\tavg: %f" % (
-                    {param.name: val for (param, val) in paramMap.items()},
-                    metricName, metric, avgSoFar))
-
-        if eva.isLargerBetter():
-            bestIndex = np.argmax(metrics)
-        else:
-            bestIndex = np.argmin(metrics)
-
-        bestParams = epm[bestIndex]
-        bestModel = est.fit(dataset, bestParams)
-        avgMetrics = [m / nFolds for m in metrics]
-        bestAvg = avgMetrics[bestIndex]
-        print("Best model:\nparams: %s\t%s: %f" % (
-            {param.name: val for (param, val) in bestParams.items()},
-            metricName, bestAvg))
-
-        return self._copyValues(CrossValidatorModel(bestModel, avgMetrics))
-
-# COMMAND ----------
-
-finalModelFit
-
-# COMMAND ----------
-
-finalModelFit.explainParams()
+evaluator.evaluate(testStore)
 
 # COMMAND ----------
 
@@ -586,7 +497,62 @@ type(pred)
 
 # COMMAND ----------
 
-pred.head()
+rfRegression = regression.RandomForestRegressor(featuresCol='sclaedFeatures', labelCol='ERBMI')
+
+# COMMAND ----------
+
+pipeRandom = Pipeline(stages = [vecScaled, scaled, rfRegression])
+
+# COMMAND ----------
+
+randomModel = pipeRandom.fit(training)
+
+# COMMAND ----------
+
+randomTested = randomModel.transform(test)
+
+# COMMAND ----------
+
+evaluator = RegressionEvaluator(labelCol= rfRegression.getLabelCol() , predictionCol= rfRegression.getPredictionCol())
+
+# COMMAND ----------
+
+evaluator.evaluate(randomTested)
+
+# COMMAND ----------
+
+randomStage = randomModel.stages[-1]
+
+# COMMAND ----------
+
+randomStage.featureImportances
+
+# COMMAND ----------
+
+featuresImportances
+
+# COMMAND ----------
+
+valuesDF['randomForestFeatures'] = randomStage.featureImportances
+
+# COMMAND ----------
+
+indexDf = valuesDF.set_index('feature')
+indexDf
+
+# COMMAND ----------
+
+plt.figure()
+fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+
+ax = fig.add_subplot(111) 
+ax2 = ax.twinx() 
+
+width = 0.4
+indexDf.abs().Scaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
+indexDf.randomForestFeatures.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
+
+display()
 
 # COMMAND ----------
 
@@ -668,14 +634,6 @@ testModel.stages[1].intercept
 # COMMAND ----------
 
 testModel.stages[1].
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
