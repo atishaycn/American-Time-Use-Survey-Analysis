@@ -33,7 +33,7 @@ healthCombinedEdited = healthCombined.loc[healthCombined['ERBMI'] != -1]
 
 # COMMAND ----------
 
-healthCombinedEdited.EUEATSUM.value_counts(dropna = False), healthCombinedEdited.EUEATSUM.count()
+healthCombined.EUPRPMEL.value_counts(dropna = False), healthCombined.EUPRPMEL.count()
 #healthCombinedEdited.loc[healthCombinedEdited.tewhere == -3].tewhere
 
 # COMMAND ----------
@@ -55,7 +55,40 @@ healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['tewhere']
 #'TRERNWA', 'EUFASTFDFRQ','EUMILK','EUEATSUM',
 healthCombinedCleaned = healthCombinedEdited[['ERBMI', 'ERTPREAT', 'ERTSEAT', 'EUDIETSODA',  'EUEXERCISE', 'TEAGE',  'EEINCOME1', 'EUEXFREQ', 'EUFASTFD',  'EUFFYDAY', 'EUFDSIT', 'EUGENHTH'
                                              , 'EUGROSHP', 'EUMEAT',  'EUPRPMEL', 'TUACTIVITY_N',  'tuactdur24', 'tewhere', 'TESEX']]
-healthCombinedCleaned.info
+healthCombinedCleaned.info()
+
+# COMMAND ----------
+
+ healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
+
+# COMMAND ----------
+
+cleanedPlot = healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
+
+# COMMAND ----------
+
+cleanedPlot
+
+# COMMAND ----------
+
+cleanedPlot = healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
+
+plt.figure()
+fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+
+ax = fig.add_subplot(111) 
+ax2 = ax.twinx() 
+
+
+width = 0.4
+cleanedPlot.BestScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
+cleanedPlot.Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
+
+display()
+
+# COMMAND ----------
+
+healthCombinedCleaned.describe()
 
 # COMMAND ----------
 
@@ -65,12 +98,6 @@ display()
 # COMMAND ----------
 
 sns.jointplot( x = 'ERTPREAT', y = 'ERBMI', data = healthCombinedCleaned)
-display()
-
-# COMMAND ----------
-
-plt.figure()
-plt.hist(preprocessing.scale(healthCombinedCleaned.ERTPREAT))
 display()
 
 # COMMAND ----------
@@ -91,15 +118,11 @@ display()
 
 # COMMAND ----------
 
-training, validation, test = new_df.randomSplit([0.6,0.3,0.1],0)
+training, test = new_df.randomSplit([0.7,0.3],0)
 
 # COMMAND ----------
 
 training.count()
-
-# COMMAND ----------
-
-validation.count()
 
 # COMMAND ----------
 
@@ -238,19 +261,17 @@ display()
 
 # COMMAND ----------
 
-plt.figure()
-fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+#plt.figure()
+#fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+#
+#ax = fig.add_subplot(111) 
+#ax2 = ax.twinx() 
 
-ax = fig.add_subplot(111) 
-ax2 = ax.twinx() 
+#width = 0.4
+#indexDf.abs().notScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
+#indexDf.abs().Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
 
-width = 0.4
-indexDf.abs().notScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
-indexDf.abs().Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
-
-
-
-display()
+#display()
 
 # COMMAND ----------
 
@@ -258,11 +279,11 @@ grid = tune.ParamGridBuilder()
 
 # COMMAND ----------
 
-grid = grid.addGrid(reg.elasticNetParam, [0, 0.2, 0.4, 0.6, 0.8, 1])
+grid = grid.addGrid(regScaled.elasticNetParam, [0, 0.2, 0.4, 0.6, 0.8, 1])
 
 # COMMAND ----------
 
-grid = grid.addGrid(reg.regParam, np.arange(0,.1,.01))
+grid = grid.addGrid(regScaled.regParam, np.arange(0,.1,.01))
 
 # COMMAND ----------
 
@@ -270,7 +291,7 @@ grid = grid.build()
 
 # COMMAND ----------
 
-evaluator = RegressionEvaluator(labelCol=reg.getLabelCol(), predictionCol=reg.getPredictionCol())
+evaluator = RegressionEvaluator(labelCol=regScaled.getLabelCol(), predictionCol=regScaled.getPredictionCol())
 
 # COMMAND ----------
 
@@ -299,7 +320,6 @@ class CrossValidatorVerbose(CrossValidator):
         est = self.getOrDefault(self.estimator)
         epm = self.getOrDefault(self.estimatorParamMaps)
         numModels = len(epm)
-        zzs = dict()
         eva = self.getOrDefault(self.evaluator)
         metricName = eva.getMetricName()
 
@@ -363,14 +383,6 @@ varStore = cvVer.fit(training)
 
 # COMMAND ----------
 
-valStore = varStore.transform(validation)
-
-# COMMAND ----------
-
-valStore.select(rmse).show()
-
-# COMMAND ----------
-
 testStore = varStore.transform(test)
 
 # COMMAND ----------
@@ -379,13 +391,13 @@ testStore.select(rmse).show()
 
 # COMMAND ----------
 
-newDict = {}
+linearDict = {}
 for i in range(0, len(a), 2):
-  newDict[a[i] + " " + `b[i]` + " " + a[i + 1] + " " + `b[i + 1]`] = c[i]
+  linearDict[a[i] + " " + `b[i]` + " " + a[i + 1] + " " + `b[i + 1]`] = c[i]
 
 # COMMAND ----------
 
-for key, value in sorted(newDict.iteritems(), key=lambda (k,v): (v,k)):
+for key, value in sorted(linearDict.iteritems(), key=lambda (k,v): (v,k)):
     print "%s: %s" % (key, value)
 
 # COMMAND ----------
@@ -394,7 +406,7 @@ evaluator.evaluate(testStore)
 
 # COMMAND ----------
 
-BestModel = finalModelFit.bestModel.stages[-1]
+BestModel = testStore.bestModel.stages[-1]
 BestModel
 
 # COMMAND ----------
@@ -497,6 +509,22 @@ type(pred)
 
 # COMMAND ----------
 
+gridRandom = tune.ParamGridBuilder()
+
+# COMMAND ----------
+
+gridRandom = gridRandom.addGrid(rfRegression.numTrees, [2,4,5,8])
+
+# COMMAND ----------
+
+gridRandom = gridRandom.addGrid(rfRegression.maxDepth, [2,3,4,5,6])
+
+# COMMAND ----------
+
+gridRandom = gridRandom.build()
+
+# COMMAND ----------
+
 rfRegression = regression.RandomForestRegressor(featuresCol='sclaedFeatures', labelCol='ERBMI')
 
 # COMMAND ----------
@@ -513,11 +541,11 @@ randomTested = randomModel.transform(test)
 
 # COMMAND ----------
 
-evaluator = RegressionEvaluator(labelCol= rfRegression.getLabelCol() , predictionCol= rfRegression.getPredictionCol())
+evaluatorRandom = RegressionEvaluator(labelCol= rfRegression.getLabelCol() , predictionCol= rfRegression.getPredictionCol())
 
 # COMMAND ----------
 
-evaluator.evaluate(randomTested)
+evaluatorRandom.evaluate(randomTested)
 
 # COMMAND ----------
 
@@ -556,7 +584,197 @@ display()
 
 # COMMAND ----------
 
-a = pred.prediction
+cvVrRandom = CrossValidator(estimator=pipeRandom, estimatorParamMaps=gridRandom, evaluator=evaluatorRandom)
+
+# COMMAND ----------
+
+cvVrRandom.fit(training)
+
+# COMMAND ----------
+
+cvVdVerboseRandom = CrossValidatorVerbose(estimator=pipeRandom, estimatorParamMaps=gridRandom, evaluator=evaluatorRandom, numFolds=4)
+
+# COMMAND ----------
+
+a = list()
+b = list()
+c = list()
+
+# COMMAND ----------
+
+randomFit = cvVdVerboseRandom.fit(training)
+
+# COMMAND ----------
+
+randomDict = {}
+for i in range(0, len(a), 2):
+  randomDict[a[i] + " " + `b[i]` + " " + a[i + 1] + " " + `b[i + 1]`] = c[i]
+
+# COMMAND ----------
+
+for key, value in sorted(randomDict.iteritems(), key=lambda (k,v): (v,k)):
+    print "%s: %s" % (key, value)
+
+# COMMAND ----------
+
+randomTransform = randomFit.transform(test)
+
+# COMMAND ----------
+
+randomForestBestModel = randomFit.bestModel
+
+# COMMAND ----------
+
+evaluatorRandom.evaluate(randomFit.bestModel.transform(test))
+
+# COMMAND ----------
+
+randomForestRegressionModel = randomForestBestModel.stages[-1]
+
+# COMMAND ----------
+
+bestModelFeatures = randomForestRegressionModel.featureImportances
+
+# COMMAND ----------
+
+valuesDF['randomForestBestFeatures'] = randomForestRegressionModel.featureImportances
+
+# COMMAND ----------
+
+indexDf = valuesDF.set_index('feature')
+indexDf
+
+# COMMAND ----------
+
+plt.figure()
+fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+
+ax = fig.add_subplot(111) 
+ax2 = ax.twinx() 
+
+width = 0.4
+indexDf.randomForestBestFeatures.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
+indexDf.randomForestFeatures.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
+
+display()
+
+# COMMAND ----------
+
+plt.figure()
+fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
+sns.barplot( y = 'randomForestBestFeatures', x = 'feature', data = valuesDF)
+plt.xticks(rotation = 60)
+display()
+
+# COMMAND ----------
+
+i = 0
+top5SortedDict = {}
+for key, value in sorted(randomDict.iteritems(), key=lambda (k,v): (v,k)):
+  if(i<5):
+    #print(i)
+    #print "%s: %s" % (key, value)
+    top5SortedDict[key] = value
+  i = i + 1
+  #print "%s: %s" % (key, value)
+top5SortedDict
+
+# COMMAND ----------
+
+plt.figure()
+fig=plt.figure(figsize=(20, 9), dpi= 80, facecolor='w', edgecolor='k')
+plt.bar(range(len(top5SortedDict)), list(top5SortedDict.values()), align='center')
+plt.xticks(range(len(top5SortedDict)), list(top5SortedDict.keys()))
+plt.xticks(rotation = 60)
+display()
+
+# COMMAND ----------
+
+evaluatorRandom.evaluate(randomFit.bestModel.transform(test))/min(randomFit.avgMetrics)
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
