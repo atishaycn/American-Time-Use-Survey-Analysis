@@ -21,11 +21,23 @@ from pyspark.ml.evaluation import RegressionEvaluator
 
 healthCombined = pd.read_csv('combinedHealth.csv')
 healthCombined.head()
-#healthCombined = spark.read.csv('file:///databricks/driver/combinedHealth.csv')
 
 # COMMAND ----------
 
 list(healthCombined)
+
+# COMMAND ----------
+
+healthCombined.ERBMI.value_counts(dropna = False), healthCombined.ERBMI.count()
+
+# COMMAND ----------
+
+np.float(healthCombined.loc[healthCombined.ERBMI.isin([-1])].ERBMI.count())/np.float(healthCombined.ERBMI.count())*100
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Less than 5 percent of -1(null) present, so removing those values
 
 # COMMAND ----------
 
@@ -38,18 +50,19 @@ healthCombined.EUPRPMEL.value_counts(dropna = False), healthCombined.EUPRPMEL.co
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Remove all nulls without replacement first. See the count of resulting output and decide for a different approach if the count is too less
+
+# COMMAND ----------
+
 healthCombinedEdited = healthCombinedEdited.loc[healthCombinedEdited['EUDIETSODA'].isin([1,2,3])]
-#healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['TRERNWA'].isin([-1])]
 healthCombinedEdited = healthCombinedEdited.loc[healthCombinedEdited['EUEXERCISE'].isin([1,2,])]
 healthCombinedEdited = healthCombinedEdited.loc[healthCombinedEdited['EEINCOME1'].isin([1,2,3])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUEXFREQ'].isin([-1])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUFASTFD'].isin([-2, -3])]
-#healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUFASTFDFRQ'].isin([-1,-2])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUFDSIT'].isin([-2])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUGENHTH'].isin([-2])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUMEAT'].isin([-1,-2])]
-#healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUMILK'].isin([-1])]
-#healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['EUEATSUM'].isin([-1])]
 healthCombinedEdited = healthCombinedEdited.loc[~healthCombinedEdited['tewhere'].isin([-1])]
 
 #'TRERNWA', 'EUFASTFDFRQ','EUMILK','EUEATSUM',
@@ -59,36 +72,17 @@ healthCombinedCleaned.info()
 
 # COMMAND ----------
 
- healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
-
-# COMMAND ----------
-
-cleanedPlot = healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
-
-# COMMAND ----------
-
-cleanedPlot
-
-# COMMAND ----------
-
-cleanedPlot = healthCombined.loc[healthCombined['EUPRPMEL'].isin([1,2,3])]
-
-plt.figure()
-fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
-
-ax = fig.add_subplot(111) 
-ax2 = ax.twinx() 
-
-
-width = 0.4
-cleanedPlot.BestScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
-cleanedPlot.Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
-
-display()
+# MAGIC %md
+# MAGIC Enough data after removing null to continue with analysis
 
 # COMMAND ----------
 
 healthCombinedCleaned.describe()
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC Visualize to check if scaling required
 
 # COMMAND ----------
 
@@ -102,23 +96,33 @@ display()
 
 # COMMAND ----------
 
-sqlContext = SQLContext(sc)
-
-# COMMAND ----------
-
-new_df = sqlContext.createDataFrame(healthCombinedCleaned)
-display(new_df)
-
-# COMMAND ----------
-
 plt.figure()
-pair = sns.pairplot(new_df.toPandas()[['ERBMI', 'ERTPREAT', 'ERTSEAT', 'EUDIETSODA',  'EUEXERCISE', 'TEAGE', 'TRERNWA', 'EEINCOME1', 'EUEXFREQ', 'EUFASTFD', 'EUFASTFDFRQ', 'EUFFYDAY', 'EUFDSIT', 'EUGENHTH'
-                                             , 'EUGROSHP', 'EUMEAT', 'EUMILK', 'EUPRPMEL', 'TUACTIVITY_N', 'EUEATSUM', 'tuactdur24', 'tewhere', 'TESEX']])
+pair = sns.pairplot(healthCombinedCleaned[['ERBMI', 'ERTPREAT', 'ERTSEAT', 'EUDIETSODA',  'EUEXERCISE', 'TEAGE',  'EEINCOME1', 'EUEXFREQ', 'EUFASTFD',  'EUFFYDAY', 'EUFDSIT', 'EUGENHTH'
+                                             , 'EUGROSHP', 'EUMEAT',  'EUPRPMEL', 'TUACTIVITY_N',  'tuactdur24', 'tewhere', 'TESEX']])
 display()
 
 # COMMAND ----------
 
-training, test = new_df.randomSplit([0.7,0.3],0)
+# MAGIC %md
+# MAGIC Convert pandas Dataframe to spark DataFrame for futher analysis
+
+# COMMAND ----------
+
+sqlContext = SQLContext(sc)
+
+# COMMAND ----------
+
+health_df = sqlContext.createDataFrame(healthCombinedCleaned)
+display(health_df)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Split data in train and test for modeling. 70% train, 30% test
+
+# COMMAND ----------
+
+training, test = health_df.randomSplit([0.7,0.3],0)
 
 # COMMAND ----------
 
@@ -130,20 +134,15 @@ test.count()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 2 Vector Assembler Pipeline stages   
+# MAGIC 1 - With all features   
+# MAGIC 2 - With just the intercept
+
+# COMMAND ----------
+
 vecScaled = feature.VectorAssembler(inputCols = [ 'ERTPREAT', 'ERTSEAT', 'EUDIETSODA',  'EUEXERCISE', 'TEAGE',  'EEINCOME1', 'EUEXFREQ', 'EUFASTFD',  'EUFFYDAY', 'EUFDSIT', 'EUGENHTH'
                                              , 'EUGROSHP', 'EUMEAT',  'EUPRPMEL', 'TUACTIVITY_N',  'tuactdur24', 'tewhere', 'TESEX'], outputCol = 'features')
-
-# COMMAND ----------
-
-scaled = feature.StandardScaler(inputCol='features', outputCol='sclaedFeatures')
-
-# COMMAND ----------
-
-regScaled = regression.LinearRegression(labelCol = 'ERBMI', featuresCol = 'sclaedFeatures', maxIter=5)
-
-# COMMAND ----------
-
-regUnscaled = regression.LinearRegression(labelCol = 'ERBMI', featuresCol = 'features', regParam=0, elasticNetParam = 0)
 
 # COMMAND ----------
 
@@ -151,11 +150,63 @@ vecIntercept = feature.VectorAssembler(inputCols=[], outputCol='emptyFeatures')
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Scaling stage to scale features from Vector Assembler
+
+# COMMAND ----------
+
+scaled = feature.StandardScaler(inputCol='features', outputCol='sclaedFeatures')
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Three Linear Regression Pipleline stage   
+# MAGIC 1 - LR with just the intercept   
+# MAGIC 2 - LR with all features unscaled   
+# MAGIC 3 - LR with all features and scaled stage
+
+# COMMAND ----------
+
 regIntercept = regression.LinearRegression(labelCol= 'ERBMI', featuresCol= 'emptyFeatures')
 
 # COMMAND ----------
 
+regUnscaled = regression.LinearRegression(labelCol = 'ERBMI', featuresCol = 'features', regParam=0, elasticNetParam = 0)
+
+# COMMAND ----------
+
+regScaled = regression.LinearRegression(labelCol = 'ERBMI', featuresCol = 'sclaedFeatures', maxIter=5)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 3 Piplelines for the different Linear Regression
+
+# COMMAND ----------
+
 pipeIntercept = Pipeline(stages = [vecIntercept, regIntercept])
+
+# COMMAND ----------
+
+PipeUnscaled = Pipeline(stages = [vecScaled, regUnscaled])
+
+# COMMAND ----------
+
+PipeScaled = Pipeline(stages = [vecScaled, scaled, regScaled])
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC RMSE declartion for measuring model accuracy
+
+# COMMAND ----------
+
+rmse = fn.sqrt(fn.avg((fn.col('ERBMI') - fn.col('prediction'))**2))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Starting with the Intercept model analysis
 
 # COMMAND ----------
 
@@ -171,11 +222,13 @@ interceptModel.transform(test).select(rmse).show()
 
 # COMMAND ----------
 
-PipeUnscaled = Pipeline(stages = [vecScaled, regUnscaled])
+# MAGIC %md
+# MAGIC RMSE of 5.71 with just the intercept   
+# MAGIC Trying to LR with unscaled features
 
 # COMMAND ----------
 
-PipeScaled = Pipeline(stages = [vecScaled, scaled, regScaled])
+PipeUnscaled = Pipeline(stages = [vecScaled, regUnscaled])
 
 # COMMAND ----------
 
@@ -187,7 +240,13 @@ unScaledModel.transform(test).select(rmse).show()
 
 # COMMAND ----------
 
-linModelUnscaled = unScaledModel.stages[-1]
+# MAGIC %md
+# MAGIC Observed a reduced RMSE with the features   
+# MAGIC Now, scaling the features before fitting to the model
+
+# COMMAND ----------
+
+PipeScaled = Pipeline(stages = [vecScaled, scaled, regScaled])
 
 # COMMAND ----------
 
@@ -199,11 +258,34 @@ scaledModel.transform(test).select(rmse).show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Scaled features resulted with a very small increase in the intercept
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Analysing coefficeints of scaled and unscaled model
+
+# COMMAND ----------
+
+linModelUnscaled = unScaledModel.stages[-1]
+
+# COMMAND ----------
+
 linModelUnscaled.coefficients
 
 # COMMAND ----------
 
+linModelScaled = scaledModel.stages[-1]
+
+# COMMAND ----------
+
 linModelScaled.coefficients
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Adding values to DataFrame for plotting the coefficients
 
 # COMMAND ----------
 
@@ -224,10 +306,12 @@ valuesDF
 # COMMAND ----------
 
 valuesDF.columns = ['feature', 'notScaled', 'Scaled']
+valuesDF.columns
 
 # COMMAND ----------
 
-valuesDF.columns
+# MAGIC %md
+# MAGIC Plotting scaled model with seaborn
 
 # COMMAND ----------
 
@@ -239,6 +323,11 @@ display()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Plotting unscaled model with seaborn
+
+# COMMAND ----------
+
 plt.figure()
 fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
 sns.barplot( y = 'notScaled', x = 'feature', data = valuesDF)
@@ -247,31 +336,30 @@ display()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Plotting scaled and unsacled for comparison
+
+# COMMAND ----------
+
+indexDf = valuesDF.set_index('feature')
+indexDf
+
+# COMMAND ----------
+
 plt.figure()
 fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
-
 ax = fig.add_subplot(111) 
 ax2 = ax.twinx() 
-
 width = 0.4
 indexDf.notScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
 indexDf.Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
-
 display()
 
 # COMMAND ----------
 
-#plt.figure()
-#fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
-#
-#ax = fig.add_subplot(111) 
-#ax2 = ax.twinx() 
-
-#width = 0.4
-#indexDf.abs().notScaled.plot(kind='bar', color='red', ax=ax, width=width, position=0, legend = True)
-#indexDf.abs().Scaled.plot(kind='bar', color='blue', ax=ax, width=width, position=1, legend = True)
-
-#display()
+# MAGIC %md
+# MAGIC Applying regularization to further improve our RMSE   
+# MAGIC First step to build a grid of two parameters - ElasticNetRegularization
 
 # COMMAND ----------
 
@@ -291,15 +379,17 @@ grid = grid.build()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Defining evalutor for Cross Validation
+
+# COMMAND ----------
+
 evaluator = RegressionEvaluator(labelCol=regScaled.getLabelCol(), predictionCol=regScaled.getPredictionCol())
 
 # COMMAND ----------
 
-crossPipe = Pipeline(stages = [vecScaled, scaled, regScaled])
-
-# COMMAND ----------
-
-#cv = tune.CrossValidator(estimator = crossPipe, estimatorParamMaps = grid, evaluator= evaluator, numFolds = 3)
+# MAGIC %md
+# MAGIC Import cross validator, cross validator model and rand to build a custome function CrossValidatorVerbose on top of CrossValidator
 
 # COMMAND ----------
 
@@ -311,6 +401,12 @@ from pyspark.ml.tuning import CrossValidator, CrossValidatorModel
 a = list()
 b = list()
 c = list()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC CrossValidatorVerbose builds on top of Cross Validator by displaying and storing out from each fold and all the regularization parameters   
+# MAGIC These values then can be used to compare the models with different regularizations
 
 # COMMAND ----------
 
@@ -375,7 +471,12 @@ class CrossValidatorVerbose(CrossValidator):
 
 # COMMAND ----------
 
-cvVer = CrossValidatorVerbose(estimator = crossPipe, estimatorParamMaps = grid, evaluator= evaluator, numFolds = 3)
+# MAGIC %md
+# MAGIC Passing the pipeline, grid of HyperParameters, and evaluator to Cross Validation with three folds
+
+# COMMAND ----------
+
+cvVer = CrossValidatorVerbose(estimator = PipeScaled, estimatorParamMaps = grid, evaluator= evaluator, numFolds = 3)
 
 # COMMAND ----------
 
@@ -391,9 +492,25 @@ testStore.select(rmse).show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC RMSE reduced by a very low value.   
+# MAGIC Analyzing models from cross validation
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Extract all models from Cross Validation
+
+# COMMAND ----------
+
 linearDict = {}
 for i in range(0, len(a), 2):
   linearDict[a[i] + " " + `b[i]` + " " + a[i + 1] + " " + `b[i + 1]`] = c[i]
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC Sort the models with lowest rmse first
 
 # COMMAND ----------
 
@@ -402,16 +519,22 @@ for key, value in sorted(linearDict.iteritems(), key=lambda (k,v): (v,k)):
 
 # COMMAND ----------
 
-evaluator.evaluate(testStore)
+# MAGIC %md
+# MAGIC Extract the Best Model from cross validation
 
 # COMMAND ----------
 
-BestModel = testStore.bestModel.stages[-1]
+BestModel = varStore.bestModel.stages[-1]
 BestModel
 
 # COMMAND ----------
 
 BestModel.coefficients
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Add Coefficients from best model to the DataFrame for plotting
 
 # COMMAND ----------
 
@@ -423,7 +546,8 @@ valuesDF['BestScaled'] = BestModel.coefficients
 
 # COMMAND ----------
 
-indexDf
+# MAGIC %md
+# MAGIC Comparing coefficients of Best Model vs Model with regularization
 
 # COMMAND ----------
 
@@ -441,6 +565,11 @@ display()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Coefficients of best model
+
+# COMMAND ----------
+
 plt.figure()
 fig=plt.figure(figsize=(18, 16), dpi= 80, facecolor='w', edgecolor='k')
 sns.barplot( y = 'BestScaled', x = 'feature', data = valuesDF)
@@ -449,63 +578,50 @@ display()
 
 # COMMAND ----------
 
-BestModel.hasSummary
-
-# COMMAND ----------
-
 BestModel.intercept
 
 # COMMAND ----------
 
-BestModel.summary.meanSquaredError
+i = 0
+top5SortedDict = {}
+for key, value in sorted(linearDict.iteritems(), key=lambda (k,v): (v,k)):
+  if(i<3):
+    top5SortedDict[key] = value
+  i = i + 1
+top5SortedDict['Intercept'] = evaluator.evaluate(interceptModel.transform(test))
+top5SortedDict['UnscaledModel'] = evaluator.evaluate(unScaledModel.transform(test))
+top5SortedDict
 
 # COMMAND ----------
 
-BestModel.summary.r2
+cfplt.figure()
+fig=plt.figure(figsize=(20, 9), dpi= 80, facecolor='w', edgecolor='k')
+plt.bar(range(len(top5SortedDict)), list(top5SortedDict.values()), align='center')
+plt.xticks(range(len(top5SortedDict)), list(top5SortedDict.keys()))
+plt.xticks(rotation = 60)
+plt.ylabel("RMSE")
+plt.ylim([min(top5SortedDict.values()) - 0.2 , max(top5SortedDict.values()) + 0.2])
+display()
 
 # COMMAND ----------
 
-BestModel.summary.pValues
+# MAGIC %md
+# MAGIC Running Regression with Random Forest Regression
 
 # COMMAND ----------
 
-BestModel.summary.rootMeanSquaredError
+# MAGIC %md
+# MAGIC Pipleline stage for Random forest regression with scaled features
 
 # COMMAND ----------
 
-BestModel.summary.residuals.count()
+rfRegression = regression.RandomForestRegressor(featuresCol='sclaedFeatures', labelCol='ERBMI')
 
 # COMMAND ----------
 
-BestModel.params
-
-# COMMAND ----------
-
-BestModel.summary.predictions.selectExpr('cast(prediction as float) pre').collect()
-
-# COMMAND ----------
-
-BestModel.summary.predictions.select('prediction')
-
-# COMMAND ----------
-
-BestModel.summary.residuals.selectExpr('cast(residuals as float) res').show()
-
-# COMMAND ----------
-
-BestModel
-
-# COMMAND ----------
-
-BestModel.summary.predictionCol
-
-# COMMAND ----------
-
-pred = BestModel.summary.predictions.toPandas()
-
-# COMMAND ----------
-
-type(pred)
+# MAGIC %md
+# MAGIC Building grid with hyper-parameters for Randorm forest.   
+# MAGIC Grid for chossing the number of trees and the maximum depth of each tree
 
 # COMMAND ----------
 
@@ -525,10 +641,6 @@ gridRandom = gridRandom.build()
 
 # COMMAND ----------
 
-rfRegression = regression.RandomForestRegressor(featuresCol='sclaedFeatures', labelCol='ERBMI')
-
-# COMMAND ----------
-
 pipeRandom = Pipeline(stages = [vecScaled, scaled, rfRegression])
 
 # COMMAND ----------
@@ -541,11 +653,26 @@ randomTested = randomModel.transform(test)
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Defining evaluator for Random Forest
+
+# COMMAND ----------
+
 evaluatorRandom = RegressionEvaluator(labelCol= rfRegression.getLabelCol() , predictionCol= rfRegression.getPredictionCol())
 
 # COMMAND ----------
 
 evaluatorRandom.evaluate(randomTested)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC A much reduced rmse with Random Forest Regression
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Extracting feature impoartances for the variables passed on
 
 # COMMAND ----------
 
@@ -557,7 +684,8 @@ randomStage.featureImportances
 
 # COMMAND ----------
 
-featuresImportances
+# MAGIC %md 
+# MAGIC Adding feature importances to DataFrame for plotting
 
 # COMMAND ----------
 
@@ -567,6 +695,11 @@ valuesDF['randomForestFeatures'] = randomStage.featureImportances
 
 indexDf = valuesDF.set_index('feature')
 indexDf
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC IS THERE A POINT TO THIS????
 
 # COMMAND ----------
 
@@ -584,11 +717,8 @@ display()
 
 # COMMAND ----------
 
-cvVrRandom = CrossValidator(estimator=pipeRandom, estimatorParamMaps=gridRandom, evaluator=evaluatorRandom)
-
-# COMMAND ----------
-
-cvVrRandom.fit(training)
+# MAGIC %md
+# MAGIC Passing Random forest through cross validation with 4 folds
 
 # COMMAND ----------
 
@@ -622,6 +752,16 @@ randomTransform = randomFit.transform(test)
 # COMMAND ----------
 
 randomForestBestModel = randomFit.bestModel
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Evalating best Random forest results in a lower rmse
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC After hyper parametrizing we observe further reduction in the RMSE to 4.46
 
 # COMMAND ----------
 
@@ -672,11 +812,8 @@ i = 0
 top5SortedDict = {}
 for key, value in sorted(randomDict.iteritems(), key=lambda (k,v): (v,k)):
   if(i<5):
-    #print(i)
-    #print "%s: %s" % (key, value)
     top5SortedDict[key] = value
   i = i + 1
-  #print "%s: %s" % (key, value)
 top5SortedDict
 
 # COMMAND ----------
@@ -686,6 +823,7 @@ fig=plt.figure(figsize=(20, 9), dpi= 80, facecolor='w', edgecolor='k')
 plt.bar(range(len(top5SortedDict)), list(top5SortedDict.values()), align='center')
 plt.xticks(range(len(top5SortedDict)), list(top5SortedDict.keys()))
 plt.xticks(rotation = 60)
+plt.ylim([min(top5SortedDict.values()) - 0.2 , max(top5SortedDict.values()) + 0.2])
 display()
 
 # COMMAND ----------
@@ -694,164 +832,13 @@ evaluatorRandom.evaluate(randomFit.bestModel.transform(test))/min(randomFit.avgM
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-resd = BestModel.summary.residuals.toPandas()
-
-# COMMAND ----------
-
-type(resd)
-
-# COMMAND ----------
-
-b = resd.residuals
-
-# COMMAND ----------
-
-dfa = pd.DataFrame(data = a)
-
-# COMMAND ----------
-
-dfa.columns
-
-# COMMAND ----------
-
-dfa.dtypes
-
-# COMMAND ----------
-
-dfa['re'] = b
-
-# COMMAND ----------
-
-dfa.prediction
+# MAGIC %md 
+# MAGIC Plotting top 5 Randform forest model
 
 # COMMAND ----------
 
 dfa.plot.scatter('prediction', 're')
 display() 
-
-# COMMAND ----------
-
-dfa
-
-# COMMAND ----------
-
-dfa.describe()
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-
-
-# COMMAND ----------
-
-rmse = fn.sqrt(fn.avg((fn.col('ERBMI') - fn.col('prediction'))**2))
-
-# COMMAND ----------
-
-testModel.transform(test).select(rmse).show()
-
-# COMMAND ----------
-
-testModel.transform(test).show(500)
-
-# COMMAND ----------
-
-testModel.stages[1].coefficients
-
-# COMMAND ----------
-
-testModel.stages[1].intercept
-
-# COMMAND ----------
-
-testModel.stages[1].
 
 # COMMAND ----------
 
